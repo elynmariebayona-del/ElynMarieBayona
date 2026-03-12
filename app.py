@@ -1,33 +1,30 @@
-from flask import Flask, jsonify, request, render_template_string
+from flask import Flask, jsonify, request, render_template_string, redirect, url_for
 import json
 import os
 
 app = Flask(__name__)
 DATA_FILE = "students.json"
 
-# Load students from file or create default if file doesn't exist
+# Load students from file or start empty
 if os.path.exists(DATA_FILE):
     with open(DATA_FILE, "r") as f:
         students = json.load(f)
 else:
-    students = [
-        {"id": 1, "name": "ELYN MARIE BAYONA", "grade": "3rd yr", "section": "ANDROID"},
-        {"id": 2, "name": "MARIA LOPEZ", "grade": "2nd yr", "section": "WEB DEV"},
-        {"id": 3, "name": "JOHN DOE", "grade": "1st yr", "section": "NETWORKING"}
-    ]
+    students = []
     with open(DATA_FILE, "w") as f:
         json.dump(students, f, indent=4)
 
-# Helper to save students
+# Save students helper
 def save_students():
     with open(DATA_FILE, "w") as f:
         json.dump(students, f, indent=4)
 
-# Home page with table + form
+# Home / Dashboard
 @app.route('/', methods=['GET', 'POST'])
 def home():
     message = ""
     if request.method == 'POST':
+        # Add new student
         name = request.form.get('name')
         grade = request.form.get('grade')
         section = request.form.get('section')
@@ -40,87 +37,159 @@ def home():
             }
             students.append(new_student)
             save_students()
-            message = f"Student {name} added successfully!"
+            message = f"{name} added successfully!"
         else:
             message = "All fields are required!"
-    
+
     html = """
     <html>
-        <head>
-            <title>Student API</title>
-            <style>
-                body { font-family: Arial; background: #f2f2f2; text-align: center; padding: 30px; }
-                h1 { color: #333; }
-                table { margin: 20px auto; border-collapse: collapse; width: 70%; }
-                th, td { border: 1px solid #999; padding: 10px; }
-                th { background-color: #4CAF50; color: white; }
-                tr:nth-child(even) { background-color: #ddd; }
-                tr:hover { background-color: #ccc; }
-                form { margin-top: 20px; }
-                input { padding: 5px; margin: 5px; }
-                .message { color: green; font-weight: bold; }
-            </style>
-        </head>
-        <body>
-            <h1>Student List</h1>
-            {% if message %}
-            <div class="message">{{ message }}</div>
-            {% endif %}
-            <table>
-                <tr><th>ID</th><th>Name</th><th>Grade</th><th>Section</th></tr>
-                {% for student in students %}
-                <tr>
-                    <td>{{ student.id }}</td>
-                    <td>{{ student.name }}</td>
-                    <td>{{ student.grade }}</td>
-                    <td>{{ student.section }}</td>
-                </tr>
-                {% endfor %}
-            </table>
-            
-            <h2>Add New Student</h2>
-            <form method="POST">
-                <input type="text" name="name" placeholder="Name" required>
-                <input type="text" name="grade" placeholder="Grade" required>
-                <input type="text" name="section" placeholder="Section" required>
-                <input type="submit" value="Add Student">
-            </form>
-        </body>
+    <head>
+        <title>Student Dashboard</title>
+        <style>
+            body{font-family:Arial; background:linear-gradient(135deg,#ffb6c1,#ffc0cb,#ff69b4); text-align:center; padding:30px;}
+            h1{color:#880e4f;}
+            table{margin:auto; border-collapse:collapse; width:80%; background:white; box-shadow:0 10px 20px rgba(0,0,0,0.2);}
+            th,td{border:1px solid #ddd; padding:12px;}
+            th{background:#ff69b4; color:white;}
+            tr:nth-child(even){background:#ffe4ec;}
+            tr:hover{background:#ffc1e3;}
+            form{margin-top:20px;}
+            input{padding:8px; margin:5px; border-radius:6px; border:1px solid #ff69b4;}
+            button{padding:6px 12px; margin:2px; border:none; border-radius:6px; cursor:pointer;}
+            .btn-add{background:#ff1493; color:white;}
+            .btn-add:hover{background:#c2185b;}
+            .btn-edit{background:#ff69b4; color:white;}
+            .btn-edit:hover{background:#d81b60;}
+            .btn-delete{background:#f50057; color:white;}
+            .btn-delete:hover{background:#c51162;}
+            .message{color:#4a148c; font-weight:bold; margin-bottom:10px;}
+        </style>
+    </head>
+    <body>
+        <h1>🌸 Student Dashboard 🌸</h1>
+        {% if message %}
+            <div class="message">{{message}}</div>
+        {% endif %}
+        <table>
+            <tr>
+                <th>ID</th><th>Name</th><th>Grade</th><th>Section</th><th>Actions</th>
+            </tr>
+            {% for student in students %}
+            <tr>
+                <td>{{student.id}}</td>
+                <td>{{student.name}}</td>
+                <td>{{student.grade}}</td>
+                <td>{{student.section}}</td>
+                <td>
+                    <a href="/edit/{{student.id}}"><button class="btn-edit">Edit</button></a>
+                    <a href="/delete/{{student.id}}" onclick="return confirm('Are you sure?')"><button class="btn-delete">Delete</button></a>
+                </td>
+            </tr>
+            {% endfor %}
+        </table>
+
+        <h2>Add New Student</h2>
+        <form method="POST">
+            <input type="text" name="name" placeholder="Student Name" required>
+            <input type="text" name="grade" placeholder="Grade" required>
+            <input type="text" name="section" placeholder="Section" required>
+            <button type="submit" class="btn-add">Add Student</button>
+        </form>
+    </body>
     </html>
     """
     return render_template_string(html, students=students, message=message)
 
-# API route to get all students
+# Edit student
+@app.route('/edit/<int:id>', methods=['GET','POST'])
+def edit_student(id):
+    student = next((s for s in students if s["id"] == id), None)
+    if not student:
+        return redirect(url_for('home'))
+
+    message = ""
+    if request.method == 'POST':
+        name = request.form.get('name')
+        grade = request.form.get('grade')
+        section = request.form.get('section')
+        if name and grade and section:
+            student["name"] = name
+            student["grade"] = grade
+            student["section"] = section
+            save_students()
+            return redirect(url_for('home'))
+        else:
+            message = "All fields are required!"
+
+    html = """
+    <html>
+    <head>
+        <title>Edit Student</title>
+        <style>
+            body{font-family:Arial; background:linear-gradient(135deg,#ffb6c1,#ffc0cb,#ff69b4); text-align:center; padding:50px;}
+            input{padding:8px; margin:5px; border-radius:6px; border:1px solid #ff69b4;}
+            button{padding:8px 15px; border:none; border-radius:6px; cursor:pointer; background:#ff1493; color:white;}
+            button:hover{background:#c2185b;}
+            .message{color:#4a148c; font-weight:bold;}
+        </style>
+    </head>
+    <body>
+        <h1>Edit Student</h1>
+        {% if message %}<div class="message">{{message}}</div>{% endif %}
+        <form method="POST">
+            <input type="text" name="name" value="{{student.name}}" required>
+            <input type="text" name="grade" value="{{student.grade}}" required>
+            <input type="text" name="section" value="{{student.section}}" required>
+            <button type="submit">Update Student</button>
+        </form>
+        <p><a href="/">Back to Dashboard</a></p>
+    </body>
+    </html>
+    """
+    return render_template_string(html, student=student, message=message)
+
+# Delete student
+@app.route('/delete/<int:id>')
+def delete_student(id):
+    global students
+    students = [s for s in students if s["id"] != id]
+    # Reassign IDs to keep sequential
+    for i, s in enumerate(students, start=1):
+        s["id"] = i
+    save_students()
+    return redirect(url_for('home'))
+
+# API: get all students
 @app.route('/students')
 def get_students():
     return jsonify(students)
 
-# API route to get student by ID
+# API: get student by id
 @app.route('/student/<int:id>')
-def get_student(id):
-    for student in students:
-        if student["id"] == id:
-            return jsonify(student)
-    return jsonify({"message": "Student not found"}), 404
+def get_student_api(id):
+    student = next((s for s in students if s["id"]==id), None)
+    if student:
+        return jsonify(student)
+    return jsonify({"message":"Student not found"}),404
 
-# API route to add student via JSON POST
+# API: add student via JSON POST
 @app.route('/add_student', methods=['POST'])
 def add_student_api():
     data = request.json
     new_student = {
-        "id": len(students) + 1,
+        "id": len(students)+1,
         "name": data["name"],
         "grade": data["grade"],
         "section": data["section"]
     }
     students.append(new_student)
     save_students()
-    return jsonify({"message": "Student added successfully", "student": new_student})
+    return jsonify({"message":"Student added","student":new_student})
 
-# Error handling
+# 404 handler
 @app.errorhandler(404)
-def not_found(error):
-    return jsonify({"error": "Route not found"}), 404
+def not_found(e):
+    return jsonify({"error":"Route not found"}),404
 
-if __name__ == "__main__":
+if __name__=="__main__":
     app.run(debug=True)
